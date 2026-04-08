@@ -1,47 +1,67 @@
-#--------Gibbs plot ####
-ratio  <- read.csv(paste0(getwd(),"/raw_data/Ratios_EC_Cl_Na_Ca_time.csv"),
-                   header=T, sep=",", stringsAsFactors = FALSE) %>%
+# ------------------ Working environment ####
+## Loading packages
+pacman::p_load(here, # for the working directory
+               dplyr, tidyr, # data wrangling
+               lme4, lmerTest,# for glm, not used in the end
+               sf, spdep, gstat, sp, ggplot2
+) 
+
+## Working directory
+wd <- here::here()
+setwd(paste0(wd, "/data"))
+
+# ------------------ Loading data ####
+# Table with ion concentrations
+ratio  <- read.csv(paste0(getwd(), "/Ratios_EC_Cl_Na_Ca_time.csv"),
+                   header=T, sep=",", stringsAsFactors = FALSE)
+
+# Salinization as previously predicted
+saliniz  <- read.csv(paste0(getwd(), "/output/salinization.csv"),
+                     header=T, sep=",", stringsAsFactors = FALSE) 
+
+# ------------------ Data wrangling ####
+ratio <- ratio %>%
   select(HYBAS_ID, Chloride, Calcium, Sodium) %>%
-  setnames(c("HYBAS_ID", "Cl", "Ca", "Na")) %>%
-  # select(HYBAS_ID, Conductivity, Chloride, Calcium, Sodium) %>%
-  # setnames(c("HYBAS_ID", "EC", "Cl", "Ca", "Na")) %>%
+  setNames(c("HYBAS_ID", "Cl", "Ca", "Na")) %>%
+  # averaging across time
   group_by(HYBAS_ID) %>%
   summarise(across(where(is.numeric), ~ mean(.x, na.rm = TRUE))) %>%
   ungroup() %>%
+  # calculating ratio
   mutate(Na_Ca_ratio = Na/(Ca+Na))
-
-saliniz  <- read.csv(paste0(getwd(), "/output/salinization_june.csv"),
-                     header=T, sep=",", stringsAsFactors = FALSE) 
 
 saliniz <- saliniz %>%
   select(HYBAS_ID, EC, pred_EC) %>%
+  # averaging at catchment scale (across river reaches)
   group_by(HYBAS_ID) %>%
   summarize(pred_EC = mean(pred_EC, na.rm = T),
             EC = mean(EC, na.rm = T),
             salinization = EC - pred_EC) %>%
   ungroup() %>%
-  # select(-EC) %>%
-  mutate(salinization_pc = salinization/ (pred_EC+0.1)*100)
+  mutate(salinization_pc = salinization/ (pred_EC+0.1)*100) # percentage of salinization
 
+# joining information on ions ratio and salinization
 ratio_salin <- saliniz %>%
   right_join(ratio, by = "HYBAS_ID") %>%
   filter(!is.na(salinization))
 
-##Plot Gibbs Diagram
-# (a) TDS vs. Na+/(Na+ + Ca²⁺)
+# Write table
+write.csv(ratio_salin,
+          paste0(getwd(),"/output/salinization_ions_ratio.csv"), row.names = TRUE)
 
-breaks <- 10^(-1:5)
+
+# ------------------ Plot Gibbs Diagram ####
+
+breaks <- 10^(-1:5) # parameter used for log-scaleplot visualization below
 
 ratio_salin %>%
-  filter(salinization >0) %>%
+  filter(salinization >0) %>% # Focusing on sites where baseline conductivity is not underestimated
   ggplot(aes(x = Na_Ca_ratio, y = EC, color = salinization)) +
   geom_point(size = 2) +
   scale_color_gradient(low = "#FFF999", high = "#660000") +
   geom_smooth(method = "loess", se = FALSE, linetype = "dashed", color = "red") +
   xlim(0,1) + 
-  # scale_y_log10(breaks = breaks) +
   scale_y_log10(limits = c(1,1e4)) +
-  # annotation_logticks() +
   labs(x = "Na+ / (Na+ + Ca2+)",
        y = "Observed conductivity (µS/cm)") +
   theme_minimal() + 
@@ -51,15 +71,4 @@ ratio_salin %>%
         axis.text=element_text(size=12),
         axis.title=element_text(size=14))
 
-# # (b) TDS vs. Cl⁻/(Cl⁻ + HCO₃⁻)
-# ggplot(data, aes(x = TDS, y = Cl_HCO3_Ratio)) +
-#   geom_point(size = 3, color = "darkgreen") +
-#   geom_smooth(method = "loess", se = FALSE, linetype = "dashed", color = "red") +
-#   labs(title = "Gibbs Diagram (Cl- / (Cl- + HCO3-))",
-#        x = "Total Dissolved Solids (mg/L)",
-#        y = "Cl- / (Cl- + HCO3-)") +
-#   theme_minimal()
-
-write.csv(ratio_salin,
-          paste0(getwd(),"/output/salinization_ions_ratio_june.csv"), row.names = TRUE)
 
