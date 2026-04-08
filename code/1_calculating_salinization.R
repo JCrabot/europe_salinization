@@ -8,11 +8,11 @@ pacman::p_load(here, # for the working directory
                ggplot2) # graphics 
 
 ## Working directory
-wd <- here::here()
-setwd(paste0(wd, "/data"))
+wd <- paste0(here::here(), "/data")
+setwd(wd)
 
 # ------ Loading or building table compiling salinity and environmental predictors ####
-if(!file.exists(paste0(getwd(), "/output/preds.csv"))){
+if(!file.exists(paste0(wd, "/output/preds.csv"))){
 
   # ------ Loading data ####
   
@@ -40,7 +40,6 @@ if(!file.exists(paste0(getwd(), "/output/preds.csv"))){
   
   ## Equivalence between the ID of river reaches (RiverATLAS) and ID of level-12
   hyriv_hybas <- read.csv("hyriv_hybas_equivalence.csv",header=T,sep=",")
-  
   
   # ------ Processing data before running models ####
   # Joining environmental data ####
@@ -120,10 +119,18 @@ if(!file.exists(paste0(getwd(), "/output/preds.csv"))){
     distinct
   
   write.csv(EU_salt,
-            paste0(getwd(),"/outut/preds.csv"), row.names = F)
+            paste0(wd, "/outut/preds.csv"), row.names = F)
 } else {
-   EU_salt  <- read.csv(paste0(getwd(), "/output/preds.csv"),
+  
+   EU_salt  <- read.csv(paste0(wd, "/output/preds.csv"),
                       header=T, sep=",", stringsAsFactors = FALSE)
+   
+   ## List of coastal level-12 BasinATLAS catchments
+   coastal <- read.csv("coastal_catchments.csv", header=T, sep=",",
+                       stringsAsFactors = FALSE)
+   
+   ## Equivalence between the ID of river reaches (RiverATLAS) and ID of level-12
+   hyriv_hybas <- read.csv("hyriv_hybas_equivalence.csv",header=T,sep=",")
 }
 
 # ------ Splitting reference and impacted sites ####
@@ -152,6 +159,7 @@ EU_salt_ref_inland <- EU_salt %>%
   filter(!(HYRIV_ID %in% coastal$HYRIV_ID))  
 
 # ------ Model of salinity prediction and salinization calculation  ####
+
 for (area in c("coastal", "inland")){ # running separately coastal and inland models
   for (random in c(TRUE, FALSE)){ # whether to include a random variable in the RF
   # Random Forest - predicting baseline salinity ####
@@ -164,7 +172,7 @@ for (area in c("coastal", "inland")){ # running separately coastal and inland mo
   min.node.size = 5 # 5 = default for regression 
   
   # Adapting the set of reference sites depending on the coastal/ inland model
-  if (area == "coast"){
+  if (area == "coastal"){
     EU_salt_ref <- EU_salt_ref_coast
   } else {
     EU_salt_ref <- EU_salt_ref_inland
@@ -228,18 +236,18 @@ for (area in c("coastal", "inland")){ # running separately coastal and inland mo
     }
     
     ## Predicting salinity levels with the RF model
-    predicted_EC_ref <- predict(model_ref, data = env %>%
+    predicted_EC_ref <- predict(model_ref, data = EU_salt %>%
                                 dplyr::select(any_of(names(var_imp_ref))))
     
     # Building table with predictions
-    EC_pred_ref <- data.table(HYRIV_ID = env$HYRIV_ID,
+    EC_pred_ref <- data.table(HYRIV_ID = EU_salt$HYRIV_ID,
                               pred_EC = as.integer(predicted_EC_ref$predictions)) %>%
       # adding the column with the 8th-level HydroBASIN catchment ID
       left_join(hyriv_hybas %>%
                   select(HYRIV_ID, HYBAS_L08), by = "HYRIV_ID")
     
     # Selecting only relevant catchments according to the coastal/ inland model
-    if (area == "coast"){
+    if (area == "coastal"){
       EC_pred_ref <- EC_pred_ref %>%
         filter(HYBAS_L08 %in% coastal$HYBAS_L08)
     } else {
@@ -269,7 +277,7 @@ for (area in c("coastal", "inland")){ # running separately coastal and inland mo
       ungroup() %>%
       mutate(salinization_pc = salinization/ (pred_EC+0.1)*100) # salinization percentage
     
-    if (area == "coast"){
+    if (area == "coastal"){
       salinization_avg08 <- salinization_avg08 %>%
         filter(HYBAS_ID %in% coastal$HYBAS_L08)
     } else {
@@ -345,7 +353,7 @@ rivers_df <-terra::vect(paste0(wd, "/hydroatlas/HydroRIVERS_v10_eu.shp"),
   as.data.frame() %>%
   select(HYRIV_ID, LENGTH_KM)
 
-salinization  <- read.csv(paste0(getwd(), "/output/salinization.csv"),
+salinization  <- read.csv(paste0(wd, "/output/salinization.csv"),
                      header=T, sep=",", stringsAsFactors = FALSE)
 
 salinization_km <- salinization %>%
@@ -367,9 +375,9 @@ salinization_pc_km_cat <- salinization_km %>%
   select(sal_pc_cat, LENGTH_KM) %>%
   group_by(sal_pc_cat) %>%
   summarize(nb_reach = length(LENGTH_KM),
-            pc_reach = round(nb_reach/nrow(salinization_km)*100,0),
+            pc_reach = round(nb_reach/nrow(salinization_km)*100,1),
             LENGTH_KM = round(sum(LENGTH_KM),0)) %>%
-  mutate(LENGTH_KM_PC = round(LENGTH_KM / tot_length*100, 0))
+  mutate(LENGTH_KM_PC = round(LENGTH_KM / tot_length*100, 1))
 
 # Supplementary Material 2a
 salinization_km %>%
@@ -381,10 +389,14 @@ salinization_km %>%
 pc99 <- quantile(salinization_km$salinization_pc, 0.99)
 
 salinization_km %>%
-#   filter(abs(salinization_pc)<=pc99) %>%
+  ggplot(aes(x=salinization_pc)) + theme_classic() + xlab("Salinization percentage") + ylab("Count") +
+  geom_histogram(binwidth =50, color = "black", fill = "#009999") +
+  geom_vline(aes(xintercept=median(salinization_pc)), col = "red", linewidth = 1)
+
+salinization_km %>%
+  # filter(abs(salinization_pc)<=pc99) %>%
   filter(abs(salinization_pc)<=500) %>%
   ggplot(aes(x=salinization_pc)) + theme_classic() + xlab("Salinization percentage") + ylab("Count") +
   geom_histogram(binwidth =10, color = "black", fill = "#009999") +
-  # geom_histogram(binwidth =50, color = "black", fill = "#009999") +
   geom_vline(aes(xintercept=median(salinization_pc)), col = "red", linewidth = 1)
 
