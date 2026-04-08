@@ -11,112 +11,122 @@ pacman::p_load(here, # for the working directory
 wd <- here::here()
 setwd(paste0(wd, "/data"))
 
-# ------ Loading data ####
+# ------ Loading or building table compiling salinity and environmental predictors ####
+if(!file.exists(paste0(getwd(), "/output/preds.csv"))){
 
-## Salinity data, stemming from the GlobSalt dataset
-EU_salt <- read.csv("salty_temporal_EC.csv") 
+  # ------ Loading data ####
+  
+  ## Salinity data, stemming from the GlobSalt dataset
+  EU_salt <- read.csv("salty_temporal_EC.csv") 
+  
+  ## Environment (CHELSA, FutureStreams, LUCAS LUC, RiverATLAS, GIRES) for all rivers
+  env <- read.csv("environment.csv", sep=",")
+  
+  ## Geology - Total % of the upstream area covered by each geological class
+  ## for all level-12 BasinATLAS catchments
+  geology <- read.csv("geology_upstream_12catchments_percentage.csv", sep=",")
+  
+  ## Distance to the sea in km for each river reach
+  to_the_sea  <- read.csv("to_the_sea.csv", header=T, sep=",",
+                          stringsAsFactors = FALSE)
+  
+  ## Total area of seawater intrusion in level-12 BasinATLAS catchments
+  seawater <- read.csv("seawater_intrusion_basin12.csv", header=T, sep=",",
+                       stringsAsFactors = FALSE)
+  
+  ## List of coastal level-12 BasinATLAS catchments
+  coastal <- read.csv("coastal_catchments.csv", header=T, sep=",",
+                      stringsAsFactors = FALSE)
+  
+  ## Equivalence between the ID of river reaches (RiverATLAS) and ID of level-12
+  hyriv_hybas <- read.csv("hyriv_hybas_equivalence.csv",header=T,sep=",")
+  
+  
+  # ------ Processing data before running models ####
+  # Joining environmental data ####
+  
+  env <- env %>%
+    # join the geology to the other environmental variables
+    left_join(geology  %>% select(-c(HYBAS_ID, UP_AREA, area_tot)),
+              by = "HYRIV_ID")  %>%
+    select_if(function(.) n_distinct(.) >1) %>% #remove columns with unique values
+    janitor::clean_names() %>%  # to have clean column names  
+    rename(HYRIV_ID = hyriv_id) %>%   # uppercase for the ID again after using janitor
+    # computing categories of natural and impacted land covers from LUCAS LUC
+    mutate(natural_lc = lc3_mean + lc4_mean + lc5_mean + lc7_mean + lc8_mean + lc9_mean,
+           impacted_lc = lc13_mean + lc14_mean + lc15_mean)%>%
+    # joining the distance to the sea
+    left_join(to_the_sea %>% select(-outlet), by = "HYRIV_ID") %>%
+    # joining the data on seawater intrusion
+    left_join(seawater %>% select(-HYBAS_ID), by = "HYRIV_ID")
+  
+  # clean global environment
+  rm(list=c("geology", "seawater", "to_the_sea"))
+  gc()
+  
+  # Removing correlated variables ####
+  
+  # The "env" file already encompassed variables with low collinearity
+  # Checking for other possible collinearities
+  var_final = c("HYRIV_ID", "HYBAS_ID",
+                # conductivity
+                "EC",
+                # geology
+                names(env %>% select(alkali_basalt:volcanic_alkaline_group)),
+                # distance to the sea
+                "to_the_sea", 
+                # seawater intrusion
+                "seawater_area", 
+                # water intrusion
+                "wt_min_mean", "wt_wm_mean", "wt_range_mean", "wt_ztw_mean",
+                # discharge
+                "q_dq_mean", "q_zfw_mean", "q_si_mean",
+                # bioclimatic variables
+                "scd_mean","bio4_mean","bio12_mean","bio15_mean","bio9_mean",
+                # land cover
+                "impacted_lc", "natural_lc",
+                # other variables from RiverATLAS
+                "pop_ct_csu", "hft_ix_c09", "ari_ix_uav", "gla_pc_use",
+                "ria_ha_csu", "riv_tc_usu", "gwt_cm_cav", "slt_pc_cav",
+                "snd_pc_uav", "ele_mt_cmn", "aet_mm_cyr", "ero_kh_cav",
+                # probability of drying
+                "predprob30")
+  
+  # cleaning NA and infinite values
+  env <- env %>%
+    select(any_of(var_final)) %>%
+    select_if(function(.) n_distinct(.) >1) %>% #remove columns with unique values
+    filter_all(all_vars(!is.infinite(.))) %>% # remove rows with Inf values
+    na.omit() # remove all rows with NA
+  
+  # Considering the remaining variables...
+  var_remain <- as.data.frame(env %>% select(-c(HYRIV_ID)))
+  # ... and running a VIF procedure on these variables with a 0.7 threshold
+  vif_remain <- usdm::vifcor(var_remain, th = 0.7)
+  
+  # Selecting variables retained by the VIF procedure
+  env <- env %>%
+    select(-any_of(vif_remain@excluded))
+  
+  # Joining the environment to the salinity table
+  EU_salt  <- EU_salt %>%
+    select(-c(year, HYRIV_ID_yr)) %>%
+    group_by(HYBAS_ID, HYRIV_ID) %>%
+    # Averaging conductivity across years when there are several years
+    summarize(EC = mean(EC, na.rm = T)) %>%
+    ungroup() %>%
+    left_join(env, by = "HYRIV_ID") %>%
+    na.omit() %>%
+    distinct
+  
+  write.csv(EU_salt,
+            paste0(getwd(),"/outut/preds.csv"), row.names = F)
+} else {
+   EU_salt  <- read.csv(paste0(getwd(), "/output/preds.csv"),
+                      header=T, sep=",", stringsAsFactors = FALSE)
+}
 
-## Environment (CHELSA, FutureStreams, LUCAS LUC, RiverATLAS, GIRES) for all rivers
-env <- read.csv("environment.csv", sep=",")
-
-## Geology - Total % of the upstream area covered by each geological class
-## for all level-12 BasinATLAS catchments
-geology <- read.csv("geology_upstream_12catchments_percentage.csv", sep=",")
-
-## Distance to the sea in km for each river reach
-to_the_sea  <- read.csv("to_the_sea.csv", header=T, sep=",",
-                        stringsAsFactors = FALSE)
-
-## Total area of seawater intrusion in level-12 BasinATLAS catchments
-seawater <- read.csv("seawater_intrusion_basin12.csv", header=T, sep=",",
-                     stringsAsFactors = FALSE)
-
-## List of coastal level-12 BasinATLAS catchments
-coastal <- read.csv("coastal_catchments.csv", header=T, sep=",",
-                    stringsAsFactors = FALSE)
-
-## Equivalence between the ID of river reaches (RiverATLAS) and ID of level-12
-hyriv_hybas <- read.csv("hyriv_hybas_equivalence.csv",header=T,sep=",")
-
-
-# ------ Processing data before running models ####
-# Joining environmental data ####
-
-env <- env %>%
-  # join the geology to the other environmental variables
-  left_join(geology  %>% select(-c(HYBAS_ID, UP_AREA, area_tot)),
-            by = "HYRIV_ID")  %>%
-  select_if(function(.) n_distinct(.) >1) %>% #remove columns with unique values
-  janitor::clean_names() %>%  # to have clean column names  
-  rename(HYRIV_ID = hyriv_id) %>%   # uppercase for the ID again after using janitor
-  # computing categories of natural and impacted land covers from LUCAS LUC
-  mutate(natural_lc = lc3_mean + lc4_mean + lc5_mean + lc7_mean + lc8_mean + lc9_mean,
-         impacted_lc = lc13_mean + lc14_mean + lc15_mean)%>%
-  # joining the distance to the sea
-  left_join(to_the_sea %>% select(-outlet), by = "HYRIV_ID") %>%
-  # joining the data on seawater intrusion
-  left_join(seawater %>% select(-HYBAS_ID), by = "HYRIV_ID")
-
-# clean global environment
-rm(list=c("geology", "seawater", "to_the_sea"))
-gc()
-
-# Removing correlated variables ####
-
-# The "env" file already encompassed variables with low collinearity
-# Checking for other possible collinearities
-var_final = c("HYRIV_ID", "HYBAS_ID",
-              # conductivity
-              "EC",
-              # geology
-              names(env %>% select(alkali_basalt:volcanic_alkaline_group)),
-              # distance to the sea
-              "to_the_sea", 
-              # seawater intrusion
-              "seawater_area", 
-              # water intrusion
-              "wt_min_mean", "wt_wm_mean", "wt_range_mean", "wt_ztw_mean",
-              # discharge
-              "q_dq_mean", "q_zfw_mean", "q_si_mean",
-              # bioclimatic variables
-              "scd_mean","bio4_mean","bio12_mean","bio15_mean","bio9_mean",
-              # land cover
-              "impacted_lc", "natural_lc",
-              # other variables from RiverATLAS
-              "pop_ct_csu", "hft_ix_c09", "ari_ix_uav", "gla_pc_use",
-              "ria_ha_csu", "riv_tc_usu", "gwt_cm_cav", "slt_pc_cav",
-              "snd_pc_uav", "ele_mt_cmn", "aet_mm_cyr", "ero_kh_cav",
-              # probability of drying
-              "predprob30")
-
-# cleaning NA and infinite values
-env <- env %>%
-  select(any_of(var_final)) %>%
-  select_if(function(.) n_distinct(.) >1) %>% #remove columns with unique values
-  filter_all(all_vars(!is.infinite(.))) %>% # remove rows with Inf values
-  na.omit() # remove all rows with NA
-
-# Considering the remaining variables...
-var_remain <- as.data.frame(env %>% select(-c(HYRIV_ID)))
-# ... and running a VIF procedure on these variables with a 0.7 threshold
-vif_remain <- usdm::vifcor(var_remain, th = 0.7)
-
-# Selecting variables retained by the VIF procedure
-env <- env %>%
-  select(-any_of(vif_remain@excluded))
-
-# Joining the environment to the salinity table
-EU_salt  <- EU_salt %>%
-  select(-c(year, HYRIV_ID_yr)) %>%
-  group_by(HYBAS_ID, HYRIV_ID) %>%
-  # Averaging conductivity across years when there are several years
-  summarize(EC = mean(EC, na.rm = T)) %>%
-  ungroup() %>%
-  left_join(env, by = "HYRIV_ID") %>%
-  na.omit() %>%
-  distinct
-
-# Splitting reference and impacted sites ####
+# ------ Splitting reference and impacted sites ####
 thr_hfi = 50         # threshold for the human footprint index
 thr_impact_lc = 0.10 # threshold for the impacted land cover
 adding_seawater = TRUE
@@ -312,7 +322,7 @@ for (area in c("coastal", "inland")){ # running separately coastal and inland mo
   }
 }
 
-# Group coastal and inland salinization results ####
+# ------ Group coastal and inland salinization results ####
 
 saliniz_inland  <- read.csv(paste0(wd, "/output/pred_salinization_inland.csv"),
                             header=T, sep=",", stringsAsFactors = FALSE)

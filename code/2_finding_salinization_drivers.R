@@ -13,26 +13,29 @@ setwd(paste0(wd, "/data"))
 
 # ------------------ Loading data ####
 
-coastal <- read.csv("coastal_catchments.csv", header=T, sep=",", stringsAsFactors = FALSE)
-
-saliniz  <- read.csv(paste0(getwd(), "/output/salinization_sept.csv"),
-                     header=T, sep=",", stringsAsFactors = FALSE)
-
-preds  <- read.csv(paste0(getwd(), "/output/preds.csv"),
-                   header=T, sep=",", stringsAsFactors = FALSE) %>%
-  select(-EC) %>%
-  left_join(saliniz %>% select(-HYBAS_ID), by = "HYRIV_ID") %>%
-  select(-c(alkali_basalt:volcanic_alkaline_group)) %>%
-  mutate(across(where(is.numeric), ~ ifelse(. <= -999, NA, .))) %>% 
-  drop_na() %>%
-  mutate(across(c(to_the_sea:predprob30), ~rescale(.))) %>%
-  mutate(HYBAS_ID = as.factor(HYBAS_ID))
-
 # Shapefile of the catchments of HydroBASINS
 basins <- st_read(paste0(wd, "/hydroatlas/hybas_eu_lev08_v1c.shp"))
 
-# Small function to rescale data
+# Salinization file: output of the first script
+saliniz  <- read.csv(paste0(getwd(), "/output/salinization.csv"),
+                     header=T, sep=",", stringsAsFactors = FALSE)
+
+# Environmental variables as compiled in the first script
+preds  <- read.csv(paste0(getwd(), "/output/preds.csv"),
+                   header=T, sep=",", stringsAsFactors = FALSE)
+
+# Small function to rescale variables
 rescale <- function(x){(x-min(x))/(max(x)-min(x))}
+
+# Joining salinization and environment tables
+preds <- preds  %>%
+  select(-EC) %>% # because already present in salinization table
+  left_join(saliniz %>% select(-HYBAS_ID), by = "HYRIV_ID") %>%
+  select(-c(alkali_basalt:volcanic_alkaline_group)) %>% # removing geology
+  mutate(across(where(is.numeric), ~ ifelse(. <= -999, NA, .))) %>% # recoding NAs
+  drop_na() %>%
+  mutate(across(c(to_the_sea:predprob30), ~rescale(.))) %>% # rescaling predictors
+  mutate(HYBAS_ID = as.factor(HYBAS_ID))
 
 # ------------------ Averaging values at catchment scale ####### 
 salinization_avg08 <- preds %>%
