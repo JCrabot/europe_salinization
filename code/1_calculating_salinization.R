@@ -363,6 +363,10 @@ tot_length <- sum(salinization_km$LENGTH_KM)
 length_salinized <- with(salinization_km, sum(LENGTH_KM[salinization > 0]))
 pc_salinized <- length_salinized/tot_length * 100
 
+# Comparison to threshold of 5mS/cm
+sum(salinization_km$salinization >= 5000)/nrow(salinization_km) * 100
+with(salinization_km, sum(LENGTH_KM[salinization >= 5000]))
+
 salinization_pc_km_cat <- salinization_km %>%
   mutate(sal_pc_cat = factor(case_when(salinization_pc <= -50~ "-100 - -50",
                                        salinization_pc <= -10~ "-50 - -10",
