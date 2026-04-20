@@ -26,6 +26,22 @@ preds  <- read.csv(paste0(getwd(), "/output/preds.csv"),
 
 # Small function to rescale variables
 rescale <- function(x){(x-min(x))/(max(x)-min(x))}
+rescale <- function(x) {
+  rng <- range(x, na.rm = TRUE)
+  span <- diff(rng)
+  
+  # Handle exceptions
+  # -> span is 0 (all values identical)
+  # -> span is not finite (Inf, -Inf, NaN)
+  if (!is.finite(span) || span == 0) {
+    return(rep(0, length(x)))
+  }
+  
+  # Rescale: shift by min, then divide by range
+  # Result maps min -> 0 and max -> 1
+  (x - rng[1]) / span
+}
+
 
 # Joining salinization and environment tables
 preds <- preds  %>%
@@ -110,10 +126,10 @@ knn <- knearneigh(coords, k = 5)
 nb <- knn2nb(knn)
 listw <- nb2listw(nb, style = "W")
 
-# If the following Moran test is significant, it means that
-# there is remaining spatial autocorrelation
-moran_mc_result <- moran.mc(basins_sal$salinization_pc, listw, nsim = 999)
-print(moran_mc_result)
+# # If the following Moran test is significant, it means that
+# # there is spatial autocorrelation in salinization in the input data
+# moran_mc_result <- moran.mc(basins_sal$salinization_pc, listw, nsim = 999)
+# print(moran_mc_result)
 
 ### Spatial AutoRegressive (SAR) model
 

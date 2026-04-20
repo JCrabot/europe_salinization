@@ -52,9 +52,7 @@ write.csv(ratio_salin,
 
 # ------------------ Plot Gibbs Diagram ####
 
-breaks <- 10^(-1:5) # parameter used for log-scaleplot visualization below
-
-ratio_salin %>%
+gibbs_plot <- ratio_salin %>%
   filter(salinization >0) %>% # Focusing on sites where baseline conductivity is not underestimated
   ggplot(aes(x = Na_Ca_ratio, y = EC, color = salinization)) +
   geom_point(size = 2) +
@@ -71,4 +69,4 @@ ratio_salin %>%
         axis.text=element_text(size=12),
         axis.title=element_text(size=14))
 
-
+ggsave(paste0(getwd(), "/output/gibbs_plot.png"), plot = gibbs_plot)

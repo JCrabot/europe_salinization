@@ -116,10 +116,10 @@ if(!file.exists(paste0(wd, "/output/preds.csv"))){
     ungroup() %>%
     left_join(env, by = "HYRIV_ID") %>%
     na.omit() %>%
-    distinct
+    distinct()
   
   write.csv(EU_salt,
-            paste0(wd, "/outut/preds.csv"), row.names = F)
+            paste0(wd, "/output/preds.csv"), row.names = F)
 } else {
   
    EU_salt  <- read.csv(paste0(wd, "/output/preds.csv"),
