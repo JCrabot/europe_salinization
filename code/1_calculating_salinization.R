@@ -241,7 +241,7 @@ for (area in c("coastal", "inland")){ # running separately coastal and inland mo
     
     # Building table with predictions
     EC_pred_ref <- data.table(HYRIV_ID = EU_salt$HYRIV_ID,
-                              pred_EC = as.integer(predicted_EC_ref$predictions)) %>%
+                              pred_EC = predicted_EC_ref$predictions) %>%
       # adding the column with the 8th-level HydroBASIN catchment ID
       left_join(hyriv_hybas %>%
                   select(HYRIV_ID, HYBAS_L08), by = "HYRIV_ID")
@@ -366,6 +366,8 @@ pc_salinized <- length_salinized/tot_length * 100
 # Comparison to threshold of 5mS/cm
 sum(salinization_km$salinization >= 5000)/nrow(salinization_km) * 100
 with(salinization_km, sum(LENGTH_KM[salinization >= 5000]))
+sum(salinization_km$EC >= 5000)/nrow(salinization_km) * 100
+with(salinization_km, sum(LENGTH_KM[EC >= 5000]))
 
 salinization_pc_km_cat <- salinization_km %>%
   mutate(sal_pc_cat = factor(case_when(salinization_pc <= -50~ "-100 - -50",
