@@ -1,7 +1,7 @@
 Code and data associated with the article "Rivers of salt: the extent of
 salinization in European running waters" by Crabot et al.
 
-The code/ folder contains three files:
+The code/ folder contains four files:
 - 1_calculating_salinization.R: Loading data on salinity and environment, defining
 reference sites, using these sites to predict baseline salinity with a random
 forest model, calculating salinization as the difference between observed and
@@ -9,6 +9,9 @@ predicted baseline salinity.
 - 2_finding_salinization_drivers.R: computing linear models and spatial 
 autoregressive model of salinization in function of the environmental predictors
 - 3_Gibbs_plot.R: plotting salinity in function of the Na / (Na + Ca) ratio
+- setting_anthropogenic_zero.R: alternative version to calculate baseline salinity
+in which all sites are considered to get the relationship between salinity and 
+environmental drivers, then anthropogenic drivers are artificially set to zero.
 
 The data/ folder contains 8 files and two subfolders:
 - coastal_catchments.csv: vector of ID of catchments that are along the coast
