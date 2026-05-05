@@ -1,5 +1,8 @@
 Code and data associated with the article "Rivers of salt: the extent of
-salinization in European running waters" by Crabot et al.
+salinization in European running waters" by Crabot et al. All analyses were
+conducted in the R software version 4.4.0. The software can be downloaded
+from: https://cran.r-project.org/. The installation will take a few minutes.
+The whole code below should also take a few minutes to run.
 
 The code/ folder contains four files:
 - 1_calculating_salinization.R: Loading data on salinity and environment, defining
