@@ -14,7 +14,7 @@ setwd(paste0(wd, "/data"))
 # ------------------ Loading data ####
 
 # Shapefile of the catchments of HydroBASINS
-basins <- st_read(paste0(wd, "/hydroatlas/hybas_eu_lev08_v1c.shp"))
+basins <- st_read(paste0(getwd(), "/hydroatlas/hybas_eu_lev08_v1c.shp"))
 
 # Salinization file: output of the first script
 saliniz  <- read.csv(paste0(getwd(), "/output/salinization.csv"),
@@ -25,7 +25,6 @@ preds  <- read.csv(paste0(getwd(), "/output/preds.csv"),
                    header=T, sep=",", stringsAsFactors = FALSE)
 
 # Small function to rescale variables
-rescale <- function(x){(x-min(x))/(max(x)-min(x))}
 rescale <- function(x) {
   rng <- range(x, na.rm = TRUE)
   span <- diff(rng)
